@@ -1,0 +1,6 @@
+{
+  "name": "Inventory Management System",
+  "description": "Production-ready inventory management system for managing products, stock movements, suppliers, alerts, users, and audit logs.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

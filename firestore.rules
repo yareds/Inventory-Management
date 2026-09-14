@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isBootstrappedAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'yared.abegaz@gmail.com' ||
+        (request.auth.token.email != null && request.auth.token.email.matches('.*@inventorypro\\.com'))
+      );
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getUserRole() {
+      return isBootstrappedAdmin() ? 'SUPER_ADMIN' : (
+        isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          ? getUserData().role
+          : 'STAFF'
+      );
+    }
+
+    function isSuperAdmin() {
+      return isBootstrappedAdmin() || getUserRole() == 'SUPER_ADMIN';
+    }
+
+    function isAdmin() {
+      let role = getUserRole();
+      return isBootstrappedAdmin() || role == 'ADMIN' || role == 'SUPER_ADMIN';
+    }
+
+    function isStaff() {
+      let role = getUserRole();
+      return isBootstrappedAdmin() || role == 'STAFF' || role == 'ADMIN' || role == 'SUPER_ADMIN';
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update: if isAuthenticated() || true;
+      allow delete: if isSuperAdmin();
+    }
+
+    // Products Collection
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update: if isAuthenticated() || true;
+      allow delete: if isSuperAdmin();
+    }
+
+    // Categories Collection
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, update: if isAuthenticated() || true;
+      allow delete: if isSuperAdmin();
+    }
+
+    // Suppliers Collection
+    match /suppliers/{supplierId} {
+      allow read: if true;
+      allow create, update: if isAuthenticated() || true;
+      allow delete: if isSuperAdmin();
+    }
+
+    // Inventory Transactions (Immutable history)
+    match /inventoryTransactions/{transactionId} {
+      allow read: if true;
+      allow create: if isAuthenticated() || true;
+      allow update, delete: if false; // Immutable
+    }
+
+    // Stock In
+    match /stockIn/{stockInId} {
+      allow read: if true;
+      allow create: if isAuthenticated() || true;
+      allow update, delete: if false;
+    }
+
+    // Stock Out
+    match /stockOut/{stockOutId} {
+      allow read: if true;
+      allow create: if isAuthenticated() || true;
+      allow update, delete: if false;
+    }
+
+    // Stock Adjustments
+    match /stockAdjustments/{adjustmentId} {
+      allow read: if true;
+      allow create: if isAuthenticated() || true;
+      allow update, delete: if false;
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow read: if true;
+      allow create, update: if isAuthenticated() || true;
+      allow delete: if isAdmin();
+    }
+
+    // Audit Logs
+    match /auditLogs/{logId} {
+      allow read: if true;
+      allow create: if isAuthenticated() || true;
+      allow update, delete: if false; // Immutable audit trail
+    }
+
+    // Settings
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || true;
+    }
+  }
+}
