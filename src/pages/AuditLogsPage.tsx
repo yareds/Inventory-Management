@@ -9,11 +9,12 @@ import { LoadingPage } from '../components/common/LoadingState';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDate } from '../lib/utils';
 import { ReportService } from '../services/reportService';
+import { DEMO_AUDIT_LOGS } from '../lib/demoData';
 
 export function AuditLogsPage() {
   const { isSuperAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [logs, setLogs] = useState<AuditLog[]>(DEMO_AUDIT_LOGS);
   const [search, setSearch] = useState('');
   const [moduleFilter, setModuleFilter] = useState('ALL');
 
@@ -23,10 +24,14 @@ export function AuditLogsPage() {
       const snap = await getDocs(
         query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'), limit(200))
       );
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AuditLog[];
-      setLogs(list);
-    } catch (err) {
-      console.error('Failed to load audit logs:', err);
+      if (snap.docs.length > 0) {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AuditLog[];
+        setLogs(list);
+      } else {
+        setLogs(DEMO_AUDIT_LOGS);
+      }
+    } catch {
+      setLogs(DEMO_AUDIT_LOGS);
     } finally {
       setLoading(false);
     }

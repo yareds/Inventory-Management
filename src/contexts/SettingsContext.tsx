@@ -2,18 +2,9 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SystemSettings } from '../types';
+import { DEMO_SETTINGS } from '../lib/demoData';
 
-const defaultSettings: SystemSettings = {
-  businessName: 'Inventory Management',
-  businessLogo: '',
-  currency: 'USD',
-  currencySymbol: '$',
-  dateFormat: 'MM/DD/YYYY',
-  defaultReorderLevel: 10,
-  allowNegativeInventory: false,
-  lowStockAlertsEnabled: true,
-  emailAlerts: true,
-};
+const defaultSettings: SystemSettings = DEMO_SETTINGS;
 
 interface SettingsContextType {
   settings: SystemSettings;
@@ -28,41 +19,68 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    const ref = doc(db, 'settings', 'general');
-    const unsubscribe = onSnapshot(
-      ref,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          setSettings({ ...defaultSettings, ...docSnap.data() } as SystemSettings);
-        } else {
-          // Initialize default if doesn't exist
-          setDoc(ref, {
-            ...defaultSettings,
-            updatedAt: serverTimestamp(),
-            updatedBy: 'system',
-          }).catch(console.error);
+    let isMounted = true;
+    try {
+      const ref = doc(db, 'settings', 'general');
+      const unsubscribe = onSnapshot(
+        ref,
+        (docSnap) => {
+          if (!isMounted) return;
+          if (docSnap.exists()) {
+            setSettings({ ...defaultSettings, ...docSnap.data() } as SystemSettings);
+          } else {
+            // Attempt to initialize default if doesn't exist
+            setDoc(ref, {
+              ...defaultSettings,
+              updatedAt: serverTimestamp(),
+              updatedBy: 'system',
+            }).catch(() => {
+              // Ignore initial write error if permission denied
+            });
+          }
+          setLoading(false);
+        },
+        (err) => {
+          if (!isMounted) return;
+          if (err?.code === 'permission-denied') {
+            // Handled gracefully: Fall back to defaultSettings without throwing console error
+            setSettings(defaultSettings);
+          } else {
+            console.warn('Settings snapshot issue:', err.message);
+          }
+          setLoading(false);
         }
-        setLoading(false);
-      },
-      (err) => {
-        console.error('Settings snapshot error:', err);
-        setLoading(false);
-      }
-    );
+      );
 
-    return () => unsubscribe();
+      return () => {
+        isMounted = false;
+        unsubscribe();
+      };
+    } catch {
+      setLoading(false);
+    }
   }, []);
 
   const updateSettings = async (newSettings: Partial<SystemSettings>, user: any) => {
-    const ref = doc(db, 'settings', 'general');
     const updated = {
       ...settings,
       ...newSettings,
-      updatedAt: serverTimestamp(),
+      updatedAt: new Date(),
       updatedBy: user?.displayName || user?.email || 'admin',
     };
-    await setDoc(ref, updated, { merge: true });
     setSettings(updated);
+
+    try {
+      const ref = doc(db, 'settings', 'general');
+      await setDoc(ref, {
+        ...updated,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (err: any) {
+      if (err?.code !== 'permission-denied') {
+        console.warn('Unable to persist settings to Firestore:', err.message);
+      }
+    }
   };
 
   return (

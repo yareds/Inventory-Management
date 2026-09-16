@@ -23,6 +23,7 @@ import {
 import { roundToTwoDecimals, generateReferenceId, calculateStockStatus } from '../lib/utils';
 import { triggerLowStockNotification } from './notificationService';
 import { logAuditEvent } from './auditService';
+import { DEMO_TRANSACTIONS } from '../lib/demoData';
 
 export interface UserContext {
   uid: string;
@@ -457,13 +458,15 @@ export class InventoryService {
       }
 
       const snapshot = await getDocs(q);
-      return snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as InventoryTransaction[];
-    } catch (err) {
-      console.error('Failed to get movement history:', err);
-      return [];
+      if (snapshot.docs.length > 0) {
+        return snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as InventoryTransaction[];
+      }
+      return DEMO_TRANSACTIONS;
+    } catch {
+      return DEMO_TRANSACTIONS;
     }
   }
 

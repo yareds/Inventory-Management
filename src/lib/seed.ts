@@ -13,8 +13,12 @@ export async function isDatabaseEmpty(): Promise<boolean> {
   try {
     const snap = await getDocs(query(collection(db, 'products'), limit(1)));
     return snap.empty;
-  } catch (err) {
-    console.error('Error checking if db is empty:', err);
+  } catch (err: any) {
+    if (err?.code === 'permission-denied') {
+      // Handled gracefully: Firestore permissions not yet active in Firebase console
+      return false;
+    }
+    console.warn('Unable to verify database status:', err?.message || err);
     return false;
   }
 }

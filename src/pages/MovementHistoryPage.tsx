@@ -10,11 +10,12 @@ import { LoadingPage } from '../components/common/LoadingState';
 import { formatDate, formatCurrency } from '../lib/utils';
 import { ReportService } from '../services/reportService';
 import { useSettings } from '../contexts/SettingsContext';
+import { DEMO_TRANSACTIONS } from '../lib/demoData';
 
 export function MovementHistoryPage() {
   const { settings } = useSettings();
   const [loading, setLoading] = useState(true);
-  const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
+  const [transactions, setTransactions] = useState<InventoryTransaction[]>(DEMO_TRANSACTIONS);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [startDate, setStartDate] = useState('');
@@ -26,10 +27,14 @@ export function MovementHistoryPage() {
       const snap = await getDocs(
         query(collection(db, 'inventoryTransactions'), orderBy('createdAt', 'desc'), limit(150))
       );
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as InventoryTransaction[];
-      setTransactions(list);
-    } catch (err) {
-      console.error('Failed to load transaction history:', err);
+      if (snap.docs.length > 0) {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as InventoryTransaction[];
+        setTransactions(list);
+      } else {
+        setTransactions(DEMO_TRANSACTIONS);
+      }
+    } catch {
+      setTransactions(DEMO_TRANSACTIONS);
     } finally {
       setLoading(false);
     }

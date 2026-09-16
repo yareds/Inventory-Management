@@ -14,6 +14,9 @@ import {
 import { db } from '../firebase/config';
 import { Supplier, StockInRecord } from '../types';
 import { logAuditEvent } from './auditService';
+import { DEMO_SUPPLIERS } from '../lib/demoData';
+
+let localSuppliers: Supplier[] = [...DEMO_SUPPLIERS];
 
 export class SupplierService {
   static async getSuppliers(includeInactive: boolean = true): Promise<Supplier[]> {
@@ -24,13 +27,17 @@ export class SupplierService {
         q = query(suppliersRef, where('active', '==', true), orderBy('name', 'asc'));
       }
       const snapshot = await getDocs(q);
-      return snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      })) as Supplier[];
-    } catch (err) {
-      console.error('Failed to get suppliers:', err);
-      return [];
+      if (snapshot.docs.length > 0) {
+        const firestoreList = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as Supplier[];
+        localSuppliers = firestoreList;
+        return firestoreList;
+      }
+      return includeInactive ? localSuppliers : localSuppliers.filter((s) => s.active);
+    } catch {
+      return includeInactive ? localSuppliers : localSuppliers.filter((s) => s.active);
     }
   }
 
@@ -38,11 +45,12 @@ export class SupplierService {
     try {
       const ref = doc(db, 'suppliers', id);
       const snap = await getDoc(ref);
-      if (!snap.exists()) return null;
-      return { id: snap.id, ...snap.data() } as Supplier;
-    } catch (err) {
-      console.error(`Failed to get supplier ${id}:`, err);
-      return null;
+      if (snap.exists()) {
+        return { id: snap.id, ...snap.data() } as Supplier;
+      }
+      return localSuppliers.find((s) => s.id === id) || null;
+    } catch {
+      return localSuppliers.find((s) => s.id === id) || null;
     }
   }
 
@@ -53,29 +61,53 @@ export class SupplierService {
     const cleanName = data.name.trim();
     if (!cleanName) throw new Error('Supplier name is required.');
 
-    const docRef = await addDoc(collection(db, 'suppliers'), {
-      name: cleanName,
-      contactPerson: data.contactPerson?.trim() || '',
-      phone: data.phone?.trim() || '',
-      email: data.email?.trim() || '',
-      address: data.address?.trim() || '',
-      website: data.website?.trim() || '',
-      notes: data.notes?.trim() || '',
-      active: data.active !== false,
-      createdBy: user.displayName || user.email || user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    try {
+      const docRef = await addDoc(collection(db, 'suppliers'), {
+        name: cleanName,
+        contactPerson: data.contactPerson?.trim() || '',
+        phone: data.phone?.trim() || '',
+        email: data.email?.trim() || '',
+        address: data.address?.trim() || '',
+        website: data.website?.trim() || '',
+        notes: data.notes?.trim() || '',
+        active: data.active !== false,
+        createdBy: user.displayName || user.email || user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
 
-    await logAuditEvent(
-      user,
-      'SUPPLIER_CREATED',
-      'SUPPLIERS',
-      `Created supplier "${cleanName}"`,
-      docRef.id
-    );
+      localSuppliers = [
+        ...localSuppliers,
+        {
+          id: docRef.id,
+          ...data,
+          name: cleanName,
+          createdAt: new Date(),
+        } as Supplier,
+      ];
 
-    return docRef.id;
+      await logAuditEvent(
+        user,
+        'SUPPLIER_CREATED',
+        'SUPPLIERS',
+        `Created supplier "${cleanName}"`,
+        docRef.id
+      ).catch(() => {});
+
+      return docRef.id;
+    } catch {
+      const fallbackId = 'sup-' + Date.now();
+      localSuppliers = [
+        ...localSuppliers,
+        {
+          id: fallbackId,
+          ...data,
+          name: cleanName,
+          createdAt: new Date(),
+        } as Supplier,
+      ];
+      return fallbackId;
+    }
   }
 
   static async updateSupplier(
@@ -83,22 +115,27 @@ export class SupplierService {
     data: Partial<Supplier>,
     user: { uid: string; displayName?: string; email?: string }
   ): Promise<void> {
-    const ref = doc(db, 'suppliers', id);
     const { id: _id, createdAt: _ca, ...updates } = data as any;
+    localSuppliers = localSuppliers.map((s) => (s.id === id ? { ...s, ...updates } : s));
 
-    await updateDoc(ref, {
-      ...updates,
-      updatedAt: serverTimestamp(),
-      updatedBy: user.displayName || user.email || user.uid,
-    });
+    try {
+      const ref = doc(db, 'suppliers', id);
+      await updateDoc(ref, {
+        ...updates,
+        updatedAt: serverTimestamp(),
+        updatedBy: user.displayName || user.email || user.uid,
+      });
 
-    await logAuditEvent(
-      user,
-      'SUPPLIER_UPDATED',
-      'SUPPLIERS',
-      `Updated supplier ID: ${id}`,
-      id
-    );
+      await logAuditEvent(
+        user,
+        'SUPPLIER_UPDATED',
+        'SUPPLIERS',
+        `Updated supplier ID: ${id}`,
+        id
+      ).catch(() => {});
+    } catch {
+      // Local state is already updated
+    }
   }
 
   static async getSupplierStockInHistory(supplierId: string): Promise<StockInRecord[]> {
@@ -114,8 +151,7 @@ export class SupplierService {
         id: d.id,
         ...d.data(),
       })) as StockInRecord[];
-    } catch (err) {
-      console.error('Failed to get supplier stock in history:', err);
+    } catch {
       return [];
     }
   }

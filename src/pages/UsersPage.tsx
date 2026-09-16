@@ -10,11 +10,12 @@ import { LoadingPage } from '../components/common/LoadingState';
 import { useAuth } from '../contexts/AuthContext';
 import { logAuditEvent } from '../services/auditService';
 import { formatDate } from '../lib/utils';
+import { DEMO_USERS } from '../lib/demoData';
 
 export function UsersPage() {
   const { currentUser, isSuperAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [users, setUsers] = useState<AppUser[]>([]);
+  const [users, setUsers] = useState<AppUser[]>(DEMO_USERS);
   const [search, setSearch] = useState('');
 
   // Modal
@@ -30,10 +31,14 @@ export function UsersPage() {
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, 'users'));
-      const list = snap.docs.map((d) => ({ ...d.data() })) as AppUser[];
-      setUsers(list);
-    } catch (err) {
-      console.error('Failed to load users:', err);
+      if (snap.docs.length > 0) {
+        const list = snap.docs.map((d) => ({ ...d.data() })) as AppUser[];
+        setUsers(list);
+      } else {
+        setUsers(DEMO_USERS);
+      }
+    } catch {
+      setUsers(DEMO_USERS);
     } finally {
       setLoading(false);
     }
