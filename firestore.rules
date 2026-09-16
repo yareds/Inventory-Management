@@ -18,11 +18,13 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
+    // Returns 'NONE' for unauthenticated requests so role checks below
+    // never silently grant STAFF/ADMIN access to anonymous visitors.
     function getUserRole() {
       return isBootstrappedAdmin() ? 'SUPER_ADMIN' : (
         isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
           ? getUserData().role
-          : 'STAFF'
+          : (isAuthenticated() ? 'STAFF' : 'NONE')
       );
     }
 
@@ -42,78 +44,80 @@ service cloud.firestore {
 
     // Users Collection
     match /users/{userId} {
-      allow read: if true;
-      allow create, update: if isAuthenticated() || true;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow update: if isAdmin() ||
+        (request.auth.uid == userId && request.resource.data.role == resource.data.role);
       allow delete: if isSuperAdmin();
     }
 
     // Products Collection
     match /products/{productId} {
-      allow read: if true;
-      allow create, update: if isAuthenticated() || true;
-      allow delete: if isSuperAdmin();
+      allow read: if isAuthenticated();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
     }
 
     // Categories Collection
     match /categories/{categoryId} {
-      allow read: if true;
-      allow create, update: if isAuthenticated() || true;
-      allow delete: if isSuperAdmin();
+      allow read: if isAuthenticated();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
     }
 
     // Suppliers Collection
     match /suppliers/{supplierId} {
-      allow read: if true;
-      allow create, update: if isAuthenticated() || true;
-      allow delete: if isSuperAdmin();
+      allow read: if isAuthenticated();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
     }
 
     // Inventory Transactions (Immutable history)
     match /inventoryTransactions/{transactionId} {
-      allow read: if true;
-      allow create: if isAuthenticated() || true;
+      allow read: if isAuthenticated();
+      allow create: if isStaff();
       allow update, delete: if false; // Immutable
     }
 
     // Stock In
     match /stockIn/{stockInId} {
-      allow read: if true;
-      allow create: if isAuthenticated() || true;
+      allow read: if isAuthenticated();
+      allow create: if isStaff();
       allow update, delete: if false;
     }
 
     // Stock Out
     match /stockOut/{stockOutId} {
-      allow read: if true;
-      allow create: if isAuthenticated() || true;
+      allow read: if isAuthenticated();
+      allow create: if isStaff();
       allow update, delete: if false;
     }
 
     // Stock Adjustments
     match /stockAdjustments/{adjustmentId} {
-      allow read: if true;
-      allow create: if isAuthenticated() || true;
+      allow read: if isAuthenticated();
+      allow create: if isStaff();
       allow update, delete: if false;
     }
 
     // Notifications
     match /notifications/{notificationId} {
-      allow read: if true;
-      allow create, update: if isAuthenticated() || true;
+      allow read: if isAuthenticated();
+      allow create, update: if isStaff();
       allow delete: if isAdmin();
     }
 
     // Audit Logs
     match /auditLogs/{logId} {
-      allow read: if true;
-      allow create: if isAuthenticated() || true;
+      allow read: if isAuthenticated();
+      allow create: if isStaff();
       allow update, delete: if false; // Immutable audit trail
     }
 
     // Settings
     match /settings/{settingId} {
-      allow read: if true;
-      allow write: if isAuthenticated() || true;
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
   }
 }
