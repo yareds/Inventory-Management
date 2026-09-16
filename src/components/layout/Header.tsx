@@ -70,62 +70,86 @@ export function Header({ onOpenMobileNav, onNavigateTab, onNavigateProduct, onOp
 
       {/* Right Section: System Telemetry, Seed, Role Switcher, Notification Bell, User */}
       <div className="flex items-center space-x-3 sm:space-x-4">
-        {/* Firebase Live Status Indicator (Design Theme) */}
-        <div className="hidden lg:flex items-center space-x-2 px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200/80">
-          <span className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"></span>
-          <span className="text-[11px] font-mono text-slate-600">Firebase: Online</span>
-        </div>
+        {/* Firebase Live Status Indicator / Demo Mode Banner */}
+        {isDemoUser ? (
+          <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-md bg-amber-50 border border-amber-200">
+            <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
+            <span className="text-[11px] font-mono font-semibold text-amber-800">
+              Demo Mode — sample data, not saved to production
+            </span>
+            <button
+              type="button"
+              onClick={logout}
+              className="text-[11px] font-semibold text-amber-900 underline decoration-amber-400 hover:text-amber-950 ml-1"
+            >
+              Exit Demo
+            </button>
+          </div>
+        ) : (
+          <div className="hidden lg:flex items-center space-x-2 px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200/80">
+            <span className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"></span>
+            <span className="text-[11px] font-mono text-slate-600">Firebase: Online</span>
+          </div>
+        )}
 
         <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
 
-        {/* Quick Demo Seed Button */}
-        <button
-          type="button"
-          onClick={handleSeed}
-          disabled={isSeeding}
-          className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 rounded-md transition border border-slate-200 shadow-2xs"
-          title="Seed complete demo dataset"
-        >
-          <Database className="w-3.5 h-3.5 text-blue-600" />
-          <span>{isSeeding ? 'Seeding...' : 'Seed Data'}</span>
-        </button>
-
-        {/* Role Switcher Pill */}
-        <div className="relative">
+        {/* Quick Demo Seed Button — demo mode only. Gated out for real logins
+            so a genuine admin can't accidentally overwrite real business
+            data with sample inventory. */}
+        {isDemoUser && (
           <button
             type="button"
-            onClick={() => setRoleMenuOpen(!roleMenuOpen)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 transition"
+            onClick={handleSeed}
+            disabled={isSeeding}
+            className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 rounded-md transition border border-slate-200 shadow-2xs"
+            title="Reset and reseed the demo dataset"
           >
-            <span className="text-slate-400 hidden sm:inline text-[11px]">Role:</span>
-            <span className="font-semibold text-blue-700 font-mono text-[11px]">{role}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            <Database className="w-3.5 h-3.5 text-blue-600" />
+            <span>{isSeeding ? 'Seeding...' : 'Reset Demo Data'}</span>
           </button>
+        )}
 
-          {roleMenuOpen && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50 animate-in fade-in duration-150">
-              <div className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                Switch Test Role
+        {/* Role Switcher Pill — demo mode only. A real logged-in user's role
+            comes from their Firestore user doc / the security rules, not
+            client state, so this only makes sense while exploring the demo. */}
+        {isDemoUser && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setRoleMenuOpen(!roleMenuOpen)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 transition"
+            >
+              <span className="text-slate-400 hidden sm:inline text-[11px]">Role:</span>
+              <span className="font-semibold text-blue-700 font-mono text-[11px]">{role}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+
+            {roleMenuOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50 animate-in fade-in duration-150">
+                <div className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                  Switch Demo Role
+                </div>
+                {(['SUPER_ADMIN', 'ADMIN', 'STAFF'] as UserRole[]).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => {
+                      switchDemoRole(r);
+                      setRoleMenuOpen(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-slate-50 transition font-mono"
+                  >
+                    <span className={role === r ? 'font-semibold text-blue-600' : 'text-slate-700'}>
+                      {r}
+                    </span>
+                    {role === r && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                  </button>
+                ))}
               </div>
-              {(['SUPER_ADMIN', 'ADMIN', 'STAFF'] as UserRole[]).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => {
-                    switchDemoRole(r);
-                    setRoleMenuOpen(false);
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-slate-50 transition font-mono"
-                >
-                  <span className={role === r ? 'font-semibold text-blue-600' : 'text-slate-700'}>
-                    {r}
-                  </span>
-                  {role === r && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Barcode Scanner Quick Launch */}
         <button

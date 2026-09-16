@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db, auth } from '../firebase/config';
 import { FIRESTORE_RULES_SOURCE } from '../lib/demoData';
 import appletConfig from '../../firebase-applet-config.json';
 
@@ -37,6 +37,11 @@ export function FirestoreStatusProvider({ children }: { children: React.ReactNod
   }, []);
 
   const checkConnection = useCallback(async (): Promise<boolean> => {
+    // Unauthenticated requests are denied by Firestore rules by design; only check when logged in
+    if (!auth.currentUser) {
+      setHasPermissionError(false);
+      return true;
+    }
     setIsChecking(true);
     try {
       // Test read to see if security rules allow reading
@@ -47,6 +52,8 @@ export function FirestoreStatusProvider({ children }: { children: React.ReactNod
     } catch (err: any) {
       if (err?.code === 'permission-denied') {
         setHasPermissionError(true);
+      } else if (err?.code === 'unavailable') {
+        console.warn('Firestore is currently running in offline mode or network is unavailable.');
       }
       setIsChecking(false);
       return false;
@@ -54,7 +61,14 @@ export function FirestoreStatusProvider({ children }: { children: React.ReactNod
   }, []);
 
   useEffect(() => {
-    checkConnection();
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        checkConnection();
+      } else {
+        setHasPermissionError(false);
+      }
+    });
+    return () => unsubscribe();
   }, [checkConnection]);
 
   const dismissBanner = () => setIsBannerDismissed(true);

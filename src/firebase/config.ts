@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, doc, getDocFromServer, Firestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import appletConfig from '../../firebase-applet-config.json';
 
@@ -24,7 +24,18 @@ const isNamedDatabase = Boolean(
 
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
-export const db = isNamedDatabase ? getFirestore(app, rawDatabaseId) : getFirestore(app);
+
+// Initialize Firestore with experimentalForceLongPolling to avoid WebChannel stream interruptions in iframe/proxy environments
+let firestoreInstance: Firestore;
+try {
+  firestoreInstance = isNamedDatabase
+    ? initializeFirestore(app, { experimentalForceLongPolling: true }, rawDatabaseId)
+    : initializeFirestore(app, { experimentalForceLongPolling: true });
+} catch {
+  firestoreInstance = isNamedDatabase ? getFirestore(app, rawDatabaseId) : getFirestore(app);
+}
+
+export const db = firestoreInstance;
 export const storage = getStorage(app);
 
 // Connection check as required by Firebase skill
@@ -32,9 +43,12 @@ export async function validateFirestoreConnection(): Promise<boolean> {
   try {
     await getDocFromServer(doc(db, 'settings', 'general'));
     return true;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase Firestore is offline or still initializing.');
+  } catch (error: any) {
+    if (
+      error?.code === 'unavailable' ||
+      (error instanceof Error && (error.message.includes('offline') || error.message.includes('unavailable')))
+    ) {
+      console.warn('Firebase Firestore is operating in offline mode or network is unreachable.');
     }
     return false;
   }

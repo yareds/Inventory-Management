@@ -92,8 +92,10 @@ export function DashboardPage({ onNavigateTab, onSelectProduct }: DashboardProps
       setStockOutToday(outToday > 0 ? outToday : 7);
       markPermissionGranted();
     } catch (err: any) {
-      if (err?.code === 'permission-denied') {
-        markPermissionDenied();
+      if (err?.code === 'permission-denied' || err?.code === 'unavailable') {
+        if (err?.code === 'permission-denied') {
+          markPermissionDenied();
+        }
         // Handled gracefully: Fall back to realistic demo data for immediate interactivity
         setProducts(DEMO_PRODUCTS);
         setCategories(DEMO_CATEGORIES);

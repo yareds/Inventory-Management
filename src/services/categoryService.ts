@@ -9,7 +9,7 @@ import {
   where,
   orderBy,
   serverTimestamp,
-} from 'firebase/firestore';
+} from '../lib/firestoreFacade';
 import { db } from '../firebase/config';
 import { Category } from '../types';
 import { logAuditEvent } from './auditService';

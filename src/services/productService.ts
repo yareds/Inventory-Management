@@ -11,7 +11,7 @@ import {
   orderBy,
   serverTimestamp,
   limit,
-} from 'firebase/firestore';
+} from '../lib/firestoreFacade';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
 import { Product, InventoryTransaction } from '../types';

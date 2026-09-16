@@ -1,4 +1,4 @@
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp } from '../lib/firestoreFacade';
 import { db } from '../firebase/config';
 import { AuditLog } from '../types';
 

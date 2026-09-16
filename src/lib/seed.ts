@@ -6,7 +6,7 @@ import {
   serverTimestamp,
   query,
   limit,
-} from 'firebase/firestore';
+} from '../lib/firestoreFacade';
 import { db } from '../firebase/config';
 
 export async function isDatabaseEmpty(): Promise<boolean> {

@@ -8,8 +8,8 @@ import {
   orderBy,
   limit,
   getDocs,
-  Timestamp,
-} from 'firebase/firestore';
+} from '../lib/firestoreFacade';
+import type { Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import {
   InventoryTransaction,

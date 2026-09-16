@@ -10,7 +10,7 @@ import {
   serverTimestamp,
   orderBy,
   limit,
-} from 'firebase/firestore';
+} from '../lib/firestoreFacade';
 import { db } from '../firebase/config';
 import { NotificationItem } from '../types';
 

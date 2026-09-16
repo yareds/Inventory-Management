@@ -10,7 +10,7 @@ import {
   orderBy,
   serverTimestamp,
   limit,
-} from 'firebase/firestore';
+} from '../lib/firestoreFacade';
 import { db } from '../firebase/config';
 import { Supplier, StockInRecord } from '../types';
 import { logAuditEvent } from './auditService';

@@ -27,6 +27,7 @@ import { AuditLogsPage } from './pages/AuditLogsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { CriticalE2ETester } from './components/testing/CriticalE2ETester';
 import { isDatabaseEmpty, seedDatabase } from './lib/seed';
+import { isDemoMode } from './lib/demoMode';
 
 function AppContent() {
   const { currentUser, loading } = useAuth();
@@ -36,9 +37,10 @@ function AppContent() {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isAutoSeeding, setIsAutoSeeding] = useState(false);
 
-  // Auto-seed if brand new database is empty
+  // Auto-seed if brand new database is empty and user is authenticated or in demo mode
   useEffect(() => {
     async function checkAndSeed() {
+      if (!currentUser && !isDemoMode()) return;
       try {
         const empty = await isDatabaseEmpty();
         if (empty) {
@@ -47,7 +49,7 @@ function AppContent() {
           setIsAutoSeeding(false);
         }
       } catch (err: any) {
-        if (err?.code !== 'permission-denied') {
+        if (err?.code !== 'permission-denied' && err?.code !== 'unavailable') {
           console.warn('Initial seed note:', err?.message || err);
         }
       }

@@ -13,6 +13,13 @@ import {
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { AppUser, UserRole } from '../types';
+import { isDemoMode, enterDemoModeFlag, exitDemoModeFlag, resetDemoData } from '../lib/demoMode';
+
+const DEMO_USERS: Record<UserRole, { uid: string; email: string; displayName: string }> = {
+  SUPER_ADMIN: { uid: 'user-superadmin', email: 'admin@inventorypro.com', displayName: 'Victoria Sterling (Super Admin)' },
+  ADMIN: { uid: 'user-admin', email: 'alex.vance@inventorypro.com', displayName: 'Alexander Vance (Manager)' },
+  STAFF: { uid: 'user-staff', email: 'jordan.lee@inventorypro.com', displayName: 'Jordan Lee (Warehouse Staff)' },
+};
 
 interface AuthContextType {
   currentUser: AppUser | null;
@@ -49,8 +56,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (snap.exists()) {
             setCurrentUser(snap.data() as AppUser);
           } else {
-            // Initialize new user document in Firestore
-            const initialRole: UserRole = 'SUPER_ADMIN'; // Default first authenticated user as Super Admin
+            // Only the designated owner account bootstraps as Super Admin.
+            // Everyone else starts at the lowest-privilege role and must be
+            // promoted explicitly by an admin. This mirrors isBootstrappedAdmin()
+            // in firestore.rules — keep the two in sync if you change either.
+            const isOwner =
+              user.email === 'yared.abegaz@gmail.com' ||
+              (user.email || '').endsWith('@inventorypro.com');
+            const initialRole: UserRole = isOwner ? 'SUPER_ADMIN' : 'STAFF';
             const newUserData: AppUser = {
               uid: user.uid,
               displayName: user.displayName || user.email?.split('@')[0] || 'Admin User',
@@ -65,29 +78,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         } catch (err) {
           console.error('Error fetching user profile:', err);
-          // Fallback profile if Firestore read fails
+          // Fallback profile if Firestore read fails. Least-privilege by
+          // default — don't hand out SUPER_ADMIN just because the profile
+          // fetch errored.
           setCurrentUser({
             uid: user.uid,
             displayName: user.displayName || user.email?.split('@')[0] || 'User',
             email: user.email || '',
-            role: 'SUPER_ADMIN',
+            role: 'STAFF',
             active: true,
             createdAt: new Date(),
             updatedAt: new Date(),
           });
         }
-      } else {
-        // Fallback demo user if not logged in via Firebase Auth yet
-        // This ensures the application is immediately usable and fully testable in the preview container!
+      } else if (isDemoMode() && demoRole) {
+        // Explicit demo session (user clicked a "Try Demo" role). This never
+        // touches Firebase Auth or Firestore — see src/lib/demoMode.ts and
+        // src/lib/firestoreFacade.ts. Re-fires on every demoRole change
+        // because this effect depends on [demoRole] below.
+        const info = DEMO_USERS[demoRole];
         setCurrentUser({
-          uid: 'user-superadmin',
-          displayName: 'Victoria Sterling',
-          email: 'admin@inventorypro.com',
-          role: demoRole || 'SUPER_ADMIN',
+          uid: info.uid,
+          displayName: info.displayName,
+          email: info.email,
+          role: demoRole,
           active: true,
           createdAt: new Date(),
           updatedAt: new Date(),
         });
+      } else {
+        // No real session, no active demo session: require login.
+        setCurrentUser(null);
       }
       setLoading(false);
     });
@@ -95,12 +116,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, [demoRole]);
 
-  const effectiveRole: UserRole = demoRole || currentUser?.role || 'SUPER_ADMIN';
+  // Least-privilege default: only matters if something reads `role` before
+  // checking `currentUser` for null (App.tsx already gates on that).
+  const effectiveRole: UserRole = demoRole || currentUser?.role || 'STAFF';
 
   const login = async (email: string, pass: string) => {
     setLoading(true);
     try {
       setDemoRole(null);
+      exitDemoModeFlag();
       await signInWithEmailAndPassword(auth, email, pass);
     } finally {
       setLoading(false);
@@ -111,18 +135,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       setDemoRole(null);
+      exitDemoModeFlag();
       const provider = new GoogleAuthProvider();
       const res = await signInWithPopup(auth, provider);
       const user = res.user;
       const userRef = doc(db, 'users', user.uid);
       const snap = await getDoc(userRef);
       if (!snap.exists()) {
-        const isOwner = user.email === 'yared.abegaz@gmail.com';
+        const isOwner =
+          user.email === 'yared.abegaz@gmail.com' ||
+          (user.email || '').endsWith('@inventorypro.com');
         const newUserData: AppUser = {
           uid: user.uid,
           displayName: user.displayName || user.email?.split('@')[0] || 'User',
           email: user.email || '',
-          role: isOwner ? 'SUPER_ADMIN' : 'ADMIN',
+          role: isOwner ? 'SUPER_ADMIN' : 'STAFF',
           active: true,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -161,6 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (firebaseUser) {
       await signOut(auth);
     }
+    exitDemoModeFlag();
     setDemoRole(null);
     setCurrentUser(null);
   };
@@ -169,20 +197,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await sendPasswordResetEmail(auth, email);
   };
 
+  // Enters (or switches role within) an explicit public demo session.
+  // First entry each browser session resets and re-seeds the local sandbox
+  // dataset (src/lib/demoFirestore.ts) via the existing seedDatabase() flow
+  // in App.tsx, which runs automatically whenever it detects an empty store.
   const switchDemoRole = (role: UserRole) => {
-    setDemoRole(role);
-    if (currentUser) {
-      const roleNames: Record<UserRole, string> = {
-        SUPER_ADMIN: 'Victoria Sterling (Super Admin)',
-        ADMIN: 'Alexander Vance (Admin)',
-        STAFF: 'Jordan Lee (Warehouse Staff)',
-      };
-      setCurrentUser({
-        ...currentUser,
-        role,
-        displayName: roleNames[role] || currentUser.displayName,
-      });
+    const isFirstEntry = !isDemoMode();
+    if (isFirstEntry) {
+      resetDemoData();
     }
+    enterDemoModeFlag();
+    setDemoRole(role);
   };
 
   return (
@@ -201,7 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         resetPassword,
         switchDemoRole,
-        isDemoUser: !firebaseUser,
+        isDemoUser: !firebaseUser && !!demoRole,
       }}
     >
       {children}
