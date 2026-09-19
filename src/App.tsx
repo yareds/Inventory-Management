@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { FirestoreStatusProvider } from './contexts/FirestoreStatusContext';
-import { FirestoreRulesBanner } from './components/common/FirestoreRulesBanner';
 import { Sidebar, NavigationItem } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { LoginPage } from './pages/LoginPage';
@@ -115,7 +114,6 @@ function AppContent() {
 
       {/* Main Workspace Layout */}
       <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
-        <FirestoreRulesBanner />
         <Header
           onOpenMobileNav={() => setIsMobileNavOpen(true)}
           onNavigateTab={(tab) => setCurrentTab(tab)}
